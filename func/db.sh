@@ -199,9 +199,18 @@ add_mysql_database() {
         IDENTIFIED BY '$dbpass'"
     mysql_query "$query" > /dev/null
 
-    query="SHOW GRANTS FOR \`$dbuser\`"
-    md5=$(mysql_query "$query" 2>/dev/null)
-    md5=$(echo "$md5" |grep 'PASSWORD' |tr ' ' '\n' |tail -n1 |cut -f 2 -d \')
+	query="SELECT VERSION()"
+	msvcheck=$(mysql_query $query |tail -n1 |cut -d "." -f2 > /dev/null)
+	
+	if [ $msvcheck -ge "7" ];then
+		query="SHOW CREATE USER\`$dbuser\`"
+		md5=$(mysql_query "$query" 2>/dev/null)
+		md5=$(echo "$md5" |grep password |cut -f8 -d \')
+	else
+		query="SHOW GRANTS FOR \`$dbuser\`"
+		md5=$(mysql_query "$query" 2>/dev/null)
+		md5=$(echo "$md5" |grep 'PASSWORD' |tr ' ' '\n' |tail -n1 |cut -f 2 -d \')
+	fi
 }
 
 # Create PostgreSQL database

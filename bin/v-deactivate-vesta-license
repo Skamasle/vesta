@@ -2,7 +2,7 @@
 # info: deactivate vesta license
 # options: MODULE LICENSE
 #
-# The function activates and register vesta license
+# The function deactivates vesta license
 
 
 #----------------------------------------------------------#
@@ -60,6 +60,6 @@ if [ "$module" = 'SFTPJAIL' ]; then
 fi
 
 # Logging
-log_event "$OK" "$EVENT"
+log_event "$OK" "$ARGUMENTS"
 
 exit

@@ -10,16 +10,17 @@ export DEBIAN_FRONTEND=noninteractive
 RHOST='apt.vestacp.com'
 CHOST='c.vestacp.com'
 VERSION='debian'
+VESTA='/usr/local/vesta'
 memory=$(grep 'MemTotal' /proc/meminfo |tr ' ' '\n' |grep [0-9])
 arch=$(uname -i)
 os='debian'
-release=$(cat /etc/issue|grep -o [0-9]|head -n1)
+release=$(cat /etc/debian_version|grep -o [0-9]|head -n1)
 codename="$(cat /etc/os-release |grep VERSION= |cut -f 2 -d \(|cut -f 1 -d \))"
 vestacp="http://$CHOST/$VERSION/$release"
 
 if [ "$release" -eq 8 ]; then
     software="nginx apache2 apache2-utils apache2.2-common
-        apache2-suexec-custom libapache2-mod-ruid2 libapache2-mod-rpaf
+        apache2-suexec-custom libapache2-mod-ruid2
         libapache2-mod-fcgid libapache2-mod-php5 php5 php5-common php5-cgi
         php5-mysql php5-curl php5-fpm php5-pgsql awstats webalizer vsftpd
         proftpd-basic bind9 exim4 exim4-daemon-heavy clamav-daemon
@@ -28,10 +29,10 @@ if [ "$release" -eq 8 ]; then
         mysql-client postgresql postgresql-contrib phppgadmin phpMyAdmin mc
         flex whois rssh git idn zip sudo bc ftp lsof ntpdate rrdtool quota
         e2fslibs bsdutils e2fsprogs curl imagemagick fail2ban dnsutils
-        bsdmainutils cron vesta vesta-nginx vesta-php"
+        bsdmainutils cron vesta vesta-nginx vesta-php expect libmail-dkim-perl"
 else
     software="nginx apache2 apache2-utils apache2.2-common
-        apache2-suexec-custom libapache2-mod-ruid2 libapache2-mod-rpaf
+        apache2-suexec-custom libapache2-mod-ruid2
         libapache2-mod-fcgid libapache2-mod-php5 php5 php5-common php5-cgi
         php5-mysql php5-curl php5-fpm php5-pgsql awstats webalizer vsftpd
         proftpd-basic proftpd-mod-vroot bind9 exim4 exim4-daemon-heavy
@@ -40,7 +41,7 @@ else
         mysql-client postgresql postgresql-contrib phppgadmin phpMyAdmin mc
         flex whois rssh git idn zip sudo bc ftp lsof ntpdate rrdtool quota
         e2fslibs bsdutils e2fsprogs curl imagemagick fail2ban dnsutils
-        bsdmainutils cron vesta vesta-nginx vesta-php"
+        bsdmainutils cron vesta vesta-nginx vesta-php expect"
 fi
 
 # Defining help function
@@ -380,6 +381,18 @@ if [ -z "$servername" ]; then
     servername=$(hostname -f)
 fi
 
+# Set FQDN if it wasn't set
+mask1='(([[:alnum:]](-?[[:alnum:]])*)\.)'
+mask2='*[[:alnum:]](-?[[:alnum:]])+\.[[:alnum:]]{2,}'
+if ! [[ "$servername" =~ ^${mask1}${mask2}$ ]]; then
+    if [ ! -z "$servername" ]; then
+        servername="$servername.example.com"
+    else
+        servername="example.com"
+    fi
+    echo "127.0.0.1 $servername" >> /etc/hosts
+fi
+
 # Set email if it wasn't set
 if [ -z "$email" ]; then
     email="admin@$servername"
@@ -494,10 +507,10 @@ mv -f /root/.my.cnf $vst_backups/mysql > /dev/null 2>&1
 
 # Backup vesta
 service vesta stop > /dev/null 2>&1
-cp -r /usr/local/vesta/* $vst_backups/vesta > /dev/null 2>&1
+cp -r $VESTA/* $vst_backups/vesta > /dev/null 2>&1
 apt-get -y remove vesta vesta-nginx vesta-php > /dev/null 2>&1
 apt-get -y purge vesta vesta-nginx vesta-php > /dev/null 2>&1
-rm -rf /usr/local/vesta > /dev/null 2>&1
+rm -rf $VESTA > /dev/null 2>&1
 
 
 #----------------------------------------------------------#
@@ -514,7 +527,6 @@ if [ "$apache" = 'no' ]; then
     software=$(echo "$software" | sed -e "s/apache2-suexec-custom//")
     software=$(echo "$software" | sed -e "s/apache2.2-common//")
     software=$(echo "$software" | sed -e "s/libapache2-mod-ruid2//")
-    software=$(echo "$software" | sed -e "s/libapache2-mod-rpaf//")
     software=$(echo "$software" | sed -e "s/libapache2-mod-fcgid//")
     software=$(echo "$software" | sed -e "s/libapache2-mod-php5//")
 fi
@@ -544,6 +556,7 @@ if [ "$clamd" = 'no' ]; then
 fi
 if [ "$spamd" = 'no' ]; then
     software=$(echo "$software" | sed -e "s/spamassassin//")
+    software=$(echo "$software" | sed -e "s/libmail-dkim-perl//")
 fi
 if [ "$dovecot" = 'no' ]; then
     software=$(echo "$software" | sed -e "s/dovecot-imapd//")
@@ -594,9 +607,6 @@ rm -f /usr/sbin/policy-rc.d
 sed -i "s/rdAuthentication no/rdAuthentication yes/g" /etc/ssh/sshd_config
 service ssh restart
 
-# AppArmor
-#aa-complain /usr/sbin/named
-
 # Disable awstats cron
 rm -f /etc/cron.d/awstats
 
@@ -632,10 +642,10 @@ wget $vestacp/sudo/admin -O /etc/sudoers.d/admin
 chmod 440 /etc/sudoers.d/admin
 
 # Configuring system env
-echo "export VESTA='/usr/local/vesta'" > /etc/profile.d/vesta.sh
+echo "export VESTA='$VESTA'" > /etc/profile.d/vesta.sh
 chmod 755 /etc/profile.d/vesta.sh
 source /etc/profile.d/vesta.sh
-echo 'PATH=$PATH:/usr/local/vesta/bin' >> /root/.bash_profile
+echo 'PATH=$PATH:'$VESTA'/bin' >> /root/.bash_profile
 echo 'export PATH' >> /root/.bash_profile
 source /root/.bash_profile
 
@@ -644,7 +654,8 @@ wget $vestacp/logrotate/vesta -O /etc/logrotate.d/vesta
 
 # Building directory tree and creating some blank files for vesta
 mkdir -p $VESTA/conf $VESTA/log $VESTA/ssl $VESTA/data/ips \
-    $VESTA/data/queue $VESTA/data/users $VESTA/data/firewall
+    $VESTA/data/queue $VESTA/data/users $VESTA/data/firewall \
+    $VESTA/data/sessions
 touch $VESTA/data/queue/backup.pipe $VESTA/data/queue/disk.pipe \
     $VESTA/data/queue/webstats.pipe $VESTA/data/queue/restart.pipe \
     $VESTA/data/queue/traffic.pipe $VESTA/log/system.log \
@@ -653,7 +664,9 @@ chmod 750 $VESTA/conf $VESTA/data/users $VESTA/data/ips $VESTA/log
 chmod -R 750 $VESTA/data/queue
 chmod 660 $VESTA/log/*
 rm -f /var/log/vesta
-ln -s /usr/local/vesta/log /var/log/vesta
+ln -s $VESTA/log /var/log/vesta
+chown admin:admin $VESTA/data/sessions
+chmod 770 $VESTA/data/sessions
 
 # Generating vesta configuration
 rm -f $VESTA/conf/vesta.conf 2>/dev/null
@@ -817,6 +830,7 @@ if [ "$apache" = 'yes'  ]; then
     a2enmod ssl
     a2enmod actions
     a2enmod ruid2
+    a2enmod headers
     mkdir -p /etc/apache2/conf.d
     echo > /etc/apache2/conf.d/vesta.conf
     echo "# Powered by vesta" > /etc/apache2/sites-available/default
@@ -831,6 +845,9 @@ if [ "$apache" = 'yes'  ]; then
     update-rc.d apache2 defaults
     service apache2 start
     check_result $? "apache2 start failed"
+else
+    update-rc.d apache2 disable >/dev/null 2>&1
+    service apache2 stop >/dev/null 2>&1
 fi
 
 
@@ -950,6 +967,12 @@ if [ "$named" = 'yes' ]; then
     sed -i "s%listen-on%//listen%" /etc/bind/named.conf.options
     chown root:bind /etc/bind/named.conf
     chmod 640 /etc/bind/named.conf
+    aa-complain /usr/sbin/named 2>/dev/null
+    echo "/home/** rwm," >> /etc/apparmor.d/local/usr.sbin.named 2>/dev/null
+    service apparmor status >/dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        service apparmor restart
+    fi
     update-rc.d bind9 defaults
     service bind9 start
     check_result $? "bind9 start failed"
@@ -997,6 +1020,7 @@ fi
 if [ "$dovecot" = 'yes' ]; then
     gpasswd -a dovecot mail
     wget $vestacp/dovecot.tar.gz -O /etc/dovecot.tar.gz
+    wget $vestacp/logrotate/dovecot -O /etc/logrotate.d/dovecot
     cd /etc
     rm -rf dovecot dovecot.conf
     tar -xzf dovecot.tar.gz
@@ -1018,6 +1042,17 @@ if [ "$clamd" = 'yes' ]; then
     wget $vestacp/clamav/clamd.conf -O /etc/clamav/clamd.conf
     /usr/bin/freshclam
     update-rc.d clamav-daemon defaults
+    if [ ! -d "/var/run/clamav" ]; then
+        mkdir /var/run/clamav
+    fi
+    chown -R clamav:clamav /var/run/clamav
+    if [ -f "/lib/systemd/system/clamav-daemon.service" ]; then
+        file="/lib/systemd/system/clamav-daemon.service"
+        if [ $( grep -ic "mkdir" $file ) -eq 0 ]; then
+            sed -i "s/\[Service\]/\[Service\]\nExecStartPre = \/bin\/mkdir -p \/var\/run\/clamav\nExecStartPre = \/bin\/chown -R clamav:clamav \/var\/run\/clamav/g" $file
+        fi
+    fi
+
     service clamav-daemon start
     check_result $? "clamav-daeom start failed"
 fi
@@ -1032,6 +1067,9 @@ if [ "$spamd" = 'yes' ]; then
     sed -i "s/ENABLED=0/ENABLED=1/" /etc/default/spamassassin
     service spamassassin start
     check_result $? "spamassassin start failed"
+    if [[ $(systemctl list-unit-files | grep spamassassin) =~ "disabled" ]]; then
+        systemctl enable spamassassin
+    fi
 fi
 
 
@@ -1054,11 +1092,34 @@ if [ "$exim" = 'yes' ] && [ "$mysql" = 'yes' ]; then
     mysql -e "CREATE DATABASE roundcube"
     mysql -e "GRANT ALL ON roundcube.* TO roundcube@localhost IDENTIFIED BY '$r'"
     sed -i "s/%password%/$r/g" /etc/roundcube/db.inc.php
+    sed -i "s/localhost/$servername/g" /etc/roundcube/plugins/password/config.inc.php
     mysql roundcube < /usr/share/dbconfig-common/data/roundcube/install/mysql
     chmod a+r /etc/roundcube/main.inc.php
     if [ "$release" -eq 8 ]; then
         mv -f /etc/roundcube/main.inc.php /etc/roundcube/config.inc.php
         mv -f /etc/roundcube/db.inc.php /etc/roundcube/debian-db-roundcube.php
+
+        # RoundCube tinyMCE fix
+        tinymceFixArchiveURL=$vestacp/roundcube/roundcube-tinymce.tar.gz
+        tinymceParentFolder=/usr/share/roundcube/program/js
+        tinymceFolder=$tinymceParentFolder/tinymce
+        tinymceBadJS=$tinymceFolder/tiny_mce.js
+        tinymceFixArchive=$tinymceParentFolder/roundcube-tinymce.tar.gz
+        if [[ -L "$tinymceFolder" && -d "$tinymceFolder" ]]; then
+            if [ -f "$tinymceBadJS" ]; then
+                wget $tinymceFixArchiveURL -O $tinymceFixArchive
+                if [[ -f "$tinymceFixArchive" && -s "$tinymceFixArchive" ]]; then
+                    rm $tinymceFolder
+                    tar -xzf $tinymceFixArchive -C $tinymceParentFolder
+                    rm $tinymceFixArchive
+                    chown -R root:root $tinymceFolder
+                else
+                    echo "File roundcube-tinymce.tar.gz is not downloaded, RoundCube tinyMCE fix is not applied"
+                    rm $tinymceFixArchive
+                fi
+            fi
+        fi
+
     fi
 fi
 
@@ -1110,24 +1171,52 @@ check_result $? "can't create admin user"
 $VESTA/bin/v-change-user-shell admin bash
 $VESTA/bin/v-change-user-language admin $lang
 
+# RoundCube permissions fix
+if [ "$exim" = 'yes' ] && [ "$mysql" = 'yes' ]; then
+    if [ ! -d "/var/log/roundcube" ]; then
+        mkdir /var/log/roundcube
+    fi
+    chown admin:admin /var/log/roundcube
+fi
+
 # Configuring system ips
 $VESTA/bin/v-update-sys-ip
 
 # Get main ip
 ip=$(ip addr|grep 'inet '|grep global|head -n1|awk '{print $2}'|cut -f1 -d/)
-
-# Get public ip
-pub_ip=$(wget vestacp.com/what-is-my-ip/ -O - 2>/dev/null)
-if [ ! -z "$pub_ip" ] && [ "$pub_ip" != "$ip" ]; then
-    $VESTA/bin/v-change-sys-ip-nat $ip $pub_ip
-fi
-if [ -z "$pub_ip" ]; then
-    ip=$main_ip
-fi
+copy_of_ip=$ip
 
 # Firewall configuration
 if [ "$iptables" = 'yes' ]; then
     $VESTA/bin/v-update-firewall
+fi
+
+# Get public ip
+pub_ip=$(curl -s vestacp.com/what-is-my-ip/)
+
+if [ ! -z "$pub_ip" ] && [ "$pub_ip" != "$ip" ]; then
+    $VESTA/bin/v-change-sys-ip-nat $ip $pub_ip
+    ip=$pub_ip
+fi
+
+# Configuring libapache2-mod-remoteip
+if [ "$apache" = 'yes' ] && [ "$nginx"  = 'yes' ] ; then
+    copy_of_pub_ip=$pub_ip
+    echo "<IfModule mod_remoteip.c>" > /etc/apache2/mods-available/remoteip.conf
+    echo "  RemoteIPHeader X-Real-IP" >> /etc/apache2/mods-available/remoteip.conf
+    if [ "$copy_of_ip" != "127.0.0.1" ] && [ "$copy_of_pub_ip" != "127.0.0.1" ]; then
+        echo "  RemoteIPInternalProxy 127.0.0.1" >> /etc/apache2/mods-available/remoteip.conf
+    fi
+    if [ ! -z "$copy_of_ip" ] && [ "$copy_of_ip" != "$copy_of_pub_ip" ]; then
+        echo "  RemoteIPInternalProxy $copy_of_ip" >> /etc/apache2/mods-available/remoteip.conf
+    fi
+    if [ ! -z "$copy_of_pub_ip" ]; then
+        echo "  RemoteIPInternalProxy $copy_of_pub_ip" >> /etc/apache2/mods-available/remoteip.conf
+    fi
+    echo "</IfModule>" >> /etc/apache2/mods-available/remoteip.conf
+    sed -i "s/LogFormat \"%h/LogFormat \"%a/g" /etc/apache2/apache2.conf
+    a2enmod remoteip
+    service apache2 restart
 fi
 
 # Configuring mysql host
@@ -1147,19 +1236,19 @@ $VESTA/bin/v-add-domain admin $servername
 check_result $? "can't create $servername domain"
 
 # Adding cron jobs
-command='sudo /usr/local/vesta/bin/v-update-sys-queue disk'
+command="sudo $VESTA/bin/v-update-sys-queue disk"
 $VESTA/bin/v-add-cron-job 'admin' '15' '02' '*' '*' '*' "$command"
-command='sudo /usr/local/vesta/bin/v-update-sys-queue traffic'
+command="sudo $VESTA/bin/v-update-sys-queue traffic"
 $VESTA/bin/v-add-cron-job 'admin' '10' '00' '*' '*' '*' "$command"
-command='sudo /usr/local/vesta/bin/v-update-sys-queue webstats'
+command="sudo $VESTA/bin/v-update-sys-queue webstats"
 $VESTA/bin/v-add-cron-job 'admin' '30' '03' '*' '*' '*' "$command"
-command='sudo /usr/local/vesta/bin/v-update-sys-queue backup'
+command="sudo $VESTA/bin/v-update-sys-queue backup"
 $VESTA/bin/v-add-cron-job 'admin' '*/5' '*' '*' '*' '*' "$command"
-command='sudo /usr/local/vesta/bin/v-backup-users'
+command="sudo $VESTA/bin/v-backup-users"
 $VESTA/bin/v-add-cron-job 'admin' '10' '05' '*' '*' '*' "$command"
-command='sudo /usr/local/vesta/bin/v-update-user-stats'
+command="sudo $VESTA/bin/v-update-user-stats"
 $VESTA/bin/v-add-cron-job 'admin' '20' '00' '*' '*' '*' "$command"
-command='sudo /usr/local/vesta/bin/v-update-sys-rrd'
+command="sudo $VESTA/bin/v-update-sys-rrd"
 $VESTA/bin/v-add-cron-job 'admin' '*/5' '*' '*' '*' '*' "$command"
 service cron restart
 
@@ -1175,9 +1264,13 @@ fi
 update-rc.d vesta defaults
 service vesta start
 check_result $? "vesta start failed"
+chown admin:admin $VESTA/data/sessions
 
 # Adding notifications
 $VESTA/upd/add_notifications.sh
+
+# Adding cronjob for autoupdates
+$VESTA/bin/v-add-cron-vesta-autoupdate
 
 
 #----------------------------------------------------------#

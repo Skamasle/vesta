@@ -14,6 +14,9 @@
     <Directory %docroot%>
         AllowOverride All
         Options +Includes -Indexes +ExecCGI
+        php_admin_value open_basedir %docroot%:%home%/%user%/tmp
+        php_admin_value upload_tmp_dir %home%/%user%/tmp
+        php_admin_value session.save_path %home%/%user%/tmp
         <Files *.php>
           SetHandler fcgid-script
         </Files>
@@ -22,7 +25,7 @@
     <Directory %home%/%user%/web/%domain%/stats>
         AllowOverride All
     </Directory>
-    Include %home%/%user%/conf/web/%web_system%.%domain%.conf*
+    Include %home%/%user%/conf/web/%web_system%.%domain_idn%.conf*
 
 </VirtualHost>
 

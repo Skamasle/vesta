@@ -200,7 +200,7 @@ add_mysql_database() {
     mysql_query "$query" > /dev/null
 
 	query="SELECT VERSION()"
-	msvcheck=$(mysql_query $query |tail -n1 |cut -d "." -f2 > /dev/null)
+	msvcheck=$(mysql_query $query |tail -n1 |cut -d "." -f2 )
 	
 	if [ $msvcheck -ge "7" ];then
 		query="SHOW CREATE USER\`$dbuser\`"

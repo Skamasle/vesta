@@ -531,7 +531,6 @@ rebuild_mail_domain_conf() {
 
 # Rebuild MySQL
 rebuild_mysql_database() {
-
     host_str=$(grep "HOST='$HOST'" $VESTA/conf/mysql.conf)
     eval $host_str
     if [ -z $HOST ] || [ -z $USER ] || [ -z $PASSWORD ]; then
@@ -563,8 +562,15 @@ rebuild_mysql_database() {
 
     query="GRANT ALL ON \`$DB\`.* TO \`$DBUSER\`@localhost"
     mysql -h $HOST -u $USER -p$PASSWORD -e "$query" > /dev/null 2>&1
-
-    query="UPDATE mysql.user SET Password='$MD5' WHERE User='$DBUSER';"
+    
+	query="SELECT VERSION()"
+	msvcheck=$(mysql -h $HOST -u $USER -p$PASSWORD -e "$query" |tail -n1 |cut -d "." -f2 )
+	if [ $msvcheck -ge "7" ]; then
+		query="SET PASSWORD FOR \`$DBUSER\`@\`%\` = PASSWORD('$MD5');"
+	else
+    	query="UPDATE mysql.user SET Password='$MD5' WHERE User='$DBUSER';"
+		mysql -h $HOST -u $USER -p$PASSWORD -e "CREATE USER $DBUSER" > /dev/null 2>&1
+	fi
     mysql -h $HOST -u $USER -p$PASSWORD -e "$query" > /dev/null 2>&1
 
     query="FLUSH PRIVILEGES;"

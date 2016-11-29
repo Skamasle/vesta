@@ -566,10 +566,11 @@ rebuild_mysql_database() {
 	query="SELECT VERSION()"
 	msvcheck=$(mysql -h $HOST -u $USER -p$PASSWORD -e "$query" |tail -n1 |cut -d "." -f2 )
 	if [ $msvcheck -ge "7" ]; then
-		query="SET PASSWORD FOR \`$DBUSER\`@\`%\` = PASSWORD('$MD5');"
+		query="CREATE USER IF NOT EXISTS \`$DBUSER\`@\`%\`"
+		mysql -h $HOST -u $USER -p$PASSWORD -e "$query" > /dev/null 2>&1
+		query="ALTER USER \`$DBUSER\`@\`%\` IDENTIFIED WITH mysql_native_password as '$MD5';"
 	else
     	query="UPDATE mysql.user SET Password='$MD5' WHERE User='$DBUSER';"
-		mysql -h $HOST -u $USER -p$PASSWORD -e "CREATE USER $DBUSER" > /dev/null 2>&1
 	fi
     mysql -h $HOST -u $USER -p$PASSWORD -e "$query" > /dev/null 2>&1
 

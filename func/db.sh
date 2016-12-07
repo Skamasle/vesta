@@ -205,8 +205,7 @@ add_mysql_database() {
                 query="SHOW CREATE USER \`$dbuser\`"
                 md5=$(mysql_query "$query" 2>/dev/null)
                 md5=$(echo "$md5" |grep password |cut -f8 -d \')
-        echo "$md5" > /root/testt
-        else
+       else
                 query="SHOW GRANTS FOR \`$dbuser\`"
                 md5=$(mysql_query "$query" 2>/dev/null)
                 md5=$(echo "$md5" |grep 'PASSWORD' |tr ' ' '\n' |tail -n1 |cut -f 2 -d \')

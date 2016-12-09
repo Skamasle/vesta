@@ -901,6 +901,9 @@ if [ "$vsftpd" = 'yes' ]; then
     update-rc.d vsftpd defaults
     service vsftpd start
     check_result $? "vsftpd start failed"
+
+    # To be deleted after release 0.9.8-18
+    echo "/sbin/nologin" >> /etc/shells
 fi
 
 
@@ -993,6 +996,11 @@ if [ "$named" = 'yes' ]; then
     update-rc.d bind9 defaults
     service bind9 start
     check_result $? "bind9 start failed"
+
+    # Workaround for OpenVZ/Virtuozzo
+    if [ -e "/proc/vz/veinfo" ]; then
+        sed -i "s/^exit 0/service bind9 restart\nexit 0/" /etc/rc.local
+    fi
 fi
 
 #----------------------------------------------------------#
